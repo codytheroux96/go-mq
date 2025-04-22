@@ -1,9 +1,9 @@
 package repository
 
-type Memory struct {
+type InMemoryRepo struct {
 
 }
 
-func New() *Memory {
-	return &Memory{}
+func New() *InMemoryRepo {
+	return &InMemoryRepo{}
 }
