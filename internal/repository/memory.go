@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/codytheroux96/go-mq/internal/core"
@@ -23,7 +24,19 @@ func NewInMemoryRepo() *InMemoryRepo {
 }
 
 func (m *InMemoryRepo) CreateTopic(name string) error {
-	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.topics[name]; exists {
+		return fmt.Errorf("topic %q already exists", name)
+	}
+
+	m.topics[name] = &topicEntry{
+		messages: []*core.Message{},
+		offsets:  map[string]int{},
+	}
+
+	return nil
 }
 
 func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
