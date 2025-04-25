@@ -3,8 +3,10 @@ package repository
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/codytheroux96/go-mq/internal/core"
+	"github.com/google/uuid"
 )
 
 type InMemoryRepo struct {
@@ -40,7 +42,25 @@ func (m *InMemoryRepo) CreateTopic(name string) error {
 }
 
 func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
+	m.mu.RLock()
+	topicEntry, exists := m.topics[topic]
+	m.mu.RUnlock()
 
+	if !exists {
+		return fmt.Errorf("topic %q does not exist", topic)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if msg.ID == "" {
+		msg.ID == uuid.NewString()
+	}
+	msg.Timestamp = time.Now()
+
+	topicEntry.messages = append(topicEntry.messages, msg)
+
+	return nil
 }
 
 func (m *InMemoryRepo) Fetch(topic, consumerID string, limit int) ([]*core.Message, error) {
