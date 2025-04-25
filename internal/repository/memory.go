@@ -54,7 +54,7 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	defer m.mu.Unlock()
 
 	if msg.ID == "" {
-		msg.ID == uuid.NewString()
+		msg.ID = uuid.NewString()
 	}
 	msg.Timestamp = time.Now()
 
