@@ -45,7 +45,7 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	m.mu.RLock()
 	topicEntry, exists := m.topics[topic]
 	m.mu.RUnlock()
-
+	
 	if !exists {
 		return fmt.Errorf("topic %q does not exist", topic)
 	}
@@ -64,13 +64,13 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 }
 
 func (m *InMemoryRepo) Fetch(topic, consumerID string, limit int) ([]*core.Message, error) {
-
+	return nil, nil
 }
 
 func (m *InMemoryRepo) CommitOffset(topic, consumerID string, offset int) error {
-
+	return nil
 }
 
 func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
-
+	return 0, nil
 }
