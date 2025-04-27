@@ -10,10 +10,10 @@ func TestInMemoryRepo(t *testing.T) {
 	repo := NewInMemoryRepo()
 
 	tests := []struct {
-		name       string
-		action     func() (any, error)
-		expectErr  bool
-		expectVal  any
+		name      string
+		action    func() (any, error)
+		expectErr bool
+		expectVal any
 	}{
 		{
 			name: "Create new topic",
