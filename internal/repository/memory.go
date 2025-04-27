@@ -45,7 +45,7 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	m.mu.RLock()
 	topicEntry, exists := m.topics[topic]
 	m.mu.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("topic %q does not exist", topic)
 	}
@@ -64,13 +64,58 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 }
 
 func (m *InMemoryRepo) Fetch(topic, consumerID string, limit int) ([]*core.Message, error) {
-	return nil, nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	topicEntry, exists := m.topics[topic]
+	if !exists {
+		return nil, fmt.Errorf("topic %q does not exist", topic)
+	}
+
+	offset := topicEntry.offsets[consumerID]
+
+	end := offset + limit
+	if end > len(topicEntry.messages) {
+		end = len(topicEntry.messages)
+	}
+
+	if offset >= len(topicEntry.messages) {
+		return []*core.Message{}, nil
+	}
+
+	return topicEntry.messages[offset:end], nil
 }
 
 func (m *InMemoryRepo) CommitOffset(topic, consumerID string, offset int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	topicEntry, exists := m.topics[topic]
+	if !exists {
+		return fmt.Errorf("topic %q does not exist", topic)
+	}
+
+	if offset > len(topicEntry.messages) {
+		return fmt.Errorf("cannot commit offset %d beyond the topic length %d", offset, len(topicEntry.messages))
+	}
+
+	topicEntry.offsets[consumerID] = offset
 	return nil
 }
 
 func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
-	return 0, nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	topicEntry, exists := m.topics[topic]
+	if !exists {
+		return 0, fmt.Errorf("topic %q does not exist", topic)
+	}
+
+	offset, ok := topicEntry.offsets[consumerID]
+	if !ok {
+		return 0, nil
+	}
+
+	return offset, nil
 }
