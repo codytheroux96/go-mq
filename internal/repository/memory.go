@@ -15,8 +15,9 @@ type InMemoryRepo struct {
 }
 
 type topicEntry struct {
-	messages []*core.Message
-	offsets  map[string]int // consumerID -> offset
+	messages    []*core.Message
+	offsets     map[string]int // consumerID -> offset
+	subscribers map[string]*core.Consumer
 }
 
 func NewInMemoryRepo() *InMemoryRepo {
@@ -118,4 +119,18 @@ func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
 	}
 
 	return offset, nil
+}
+
+func (m *InMemoryRepo) Subscribe(topicName, consumerID string) (<-chan *core.Message, error) {
+	// lock and defer unlock
+
+	// check if topicEntry exists - return error if it doesnt
+
+	// check if already subscribed
+
+	// if not, create new consumer then register consumer
+
+	// initialize offset
+
+	return nil, nil
 }
