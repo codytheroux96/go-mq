@@ -10,4 +10,5 @@ type Repository interface {
 	Fetch(topic, consumerID string, limit int) ([]*core.Message, error)
 	CommitOffset(topic, consumerID string, offset int) error
 	GetOffset(topic, consumerID string) (int, error)
+	Subscribe(topicName, consumerID string) (<-chan *core.Message, error)
 }

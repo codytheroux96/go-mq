@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/codytheroux96/go-mq/internal/core"
+
 	"github.com/google/uuid"
 )
 
@@ -60,6 +61,15 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	msg.Timestamp = time.Now()
 
 	topicEntry.messages = append(topicEntry.messages, msg)
+
+	for _, consumer := range topicEntry.subscribers {
+		select {
+		case consumer.Inbox <- msg:
+			// sent successfully
+		default:
+			// inbox is full and we will skip
+		}
+	}
 
 	return nil
 }
@@ -122,15 +132,23 @@ func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
 }
 
 func (m *InMemoryRepo) Subscribe(topicName, consumerID string) (<-chan *core.Message, error) {
-	// lock and defer unlock
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	// check if topicEntry exists - return error if it doesnt
+	topicEntry, exists := m.topics[topicName]
+	if !exists {
+		return nil, fmt.Errorf("topic %q does not exist", topicName)
+	}
 
-	// check if already subscribed
+	if _, ok := topicEntry.subscribers[consumerID]; ok {
+		return topicEntry.subscribers[consumerID].Inbox, nil
+	}
 
-	// if not, create new consumer then register consumer
+	consumer := core.NewConsumer(consumerID)
 
-	// initialize offset
+	topicEntry.subscribers[consumerID] = consumer
+
+	topicEntry.offsets[consumerID] = 0
 
 	return nil, nil
 }
