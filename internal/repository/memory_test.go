@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/codytheroux96/go-mq/internal/core"
@@ -84,6 +85,40 @@ func TestInMemoryRepo(t *testing.T) {
 			expectErr: false,
 			expectVal: 1, // should fetch the next 1 message
 		},
+		{
+			name: "Subscribe to topic",
+			action: func() (any, error) {
+				return repo.Subscribe("test-topic", "consumer-2")
+			},
+			expectErr: false,
+		},
+		{
+			name: "Publish delivers to live subscriber",
+			action: func() (any, error) {
+				ch, err := repo.Subscribe("test-topic", "consumer-3")
+				if err != nil {
+					return nil, err
+				}
+
+				msg := core.NewMessage([]byte("live message"), "producer-1")
+				err = repo.Publish("test-topic", msg)
+				if err != nil {
+					return nil, err
+				}
+
+				select {
+				case received := <-ch:
+					if string(received.Body) != "live message" {
+						return nil, fmt.Errorf("expected 'live message', got '%s'", string(received.Body))
+					}
+					return "delivered", nil
+				default:
+					return nil, fmt.Errorf("no message received on subscriber channel")
+				}
+			},
+			expectErr: false,
+			expectVal: "delivered",
+		},
 	}
 
 	for _, tt := range tests {
@@ -111,6 +146,10 @@ func TestInMemoryRepo(t *testing.T) {
 						}
 					default:
 						t.Fatalf("unexpected return type: %T", got)
+					}
+				case string:
+					if gotStr, ok := got.(string); !ok || gotStr != expected {
+						t.Fatalf("expected value %q, got %v", expected, got)
 					}
 				default:
 					t.Fatalf("unsupported expectVal type: %T", tt.expectVal)

@@ -36,8 +36,9 @@ func (m *InMemoryRepo) CreateTopic(name string) error {
 	}
 
 	m.topics[name] = &topicEntry{
-		messages: []*core.Message{},
-		offsets:  map[string]int{},
+		messages:    []*core.Message{},
+		offsets:     map[string]int{},
+		subscribers: map[string]*core.Consumer{},
 	}
 
 	return nil
@@ -150,5 +151,5 @@ func (m *InMemoryRepo) Subscribe(topicName, consumerID string) (<-chan *core.Mes
 
 	topicEntry.offsets[consumerID] = 0
 
-	return nil, nil
+	return consumer.Inbox, nil
 }
