@@ -13,5 +13,7 @@ func Routes(app *app.Application) http.Handler {
 	mux.HandleFunc("/topics", handler.HandleTopics)
 	mux.HandleFunc("/topics/", handler.HandleDeleteTopic)
 
+	mux.HandleFunc("/publish/", handler.HandlePublish)
+
 	return mux
 }
