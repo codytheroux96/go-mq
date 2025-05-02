@@ -8,6 +8,7 @@ import (
 
 	"github.com/codytheroux96/go-mq/internal/app"
 	"github.com/codytheroux96/go-mq/internal/core"
+	"github.com/codytheroux96/go-mq/internal/repository"
 )
 
 type Handler struct {
@@ -258,5 +259,83 @@ func (h *Handler) HandleRegisterConsumer(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "consumer subscribed successfully",
+	})
+}
+
+func (h *Handler) HandleAck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.App.Logger.Warn("http method is not allowed for acknowledging", "method", r.Method)
+		http.Error(w, "http method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Header.Get("Content-Type") != "application/json" {
+		h.App.Logger.Warn("invalid content-type for acknowledging", "received", r.Header.Get("Content-Type"))
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	var req struct {
+		Topic      string `json:"topic"`
+		ConsumerID string `json:"consumer_id"`
+		MessageID  string `json:"message_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Topic == "" || req.ConsumerID == "" || req.MessageID == "" {
+		h.App.Logger.Error("invalid ack request payload", "error", err)
+		http.Error(w, "invalid payload in request", http.StatusBadRequest)
+		return
+	}
+
+	repo := h.App.Repo
+
+	memoryRepo, ok := repo.(*repository.InMemoryRepo)
+	if !ok {
+		h.App.Logger.Error("ack only supported in an in-memory repo")
+		http.Error(w, "ack not supported in current backend", http.StatusInternalServerError)
+		return
+	}
+
+	memoryRepo.Mu.Lock()
+	defer memoryRepo.Mu.Unlock()
+
+	topicEntry, exists := memoryRepo.Topics[req.Topic]
+	if !exists {
+		h.App.Logger.Warn("ack failed: topic not found", "topic", req.Topic)
+		http.Error(w, "topic not found", http.StatusNotFound)
+		return
+	}
+
+	var targetMsg *core.Message
+	for _, msg := range topicEntry.Messages {
+		if msg.ID == req.MessageID {
+			targetMsg = msg
+			break
+		}
+	}
+
+	if targetMsg == nil {
+		h.App.Logger.Warn("ack failed: message not found", "message_id", req.MessageID)
+		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+
+	if !targetMsg.DeliveredTo[req.ConsumerID] {
+		h.App.Logger.Warn("ack rejected: message not delivered to consumer", "message_id", req.MessageID, "consumer", req.ConsumerID)
+		http.Error(w, "message not delivered to this consumer", http.StatusForbidden)
+		return
+	}
+
+	if targetMsg.AckedBy[req.ConsumerID] {
+		h.App.Logger.Info("duplicate ack received", "message_id", req.MessageID, "consumer", req.ConsumerID)
+	} else {
+		targetMsg.AckedBy[req.ConsumerID] = true
+		h.App.Logger.Info("message acknowledged", "message_id", req.MessageID, "consumer", req.ConsumerID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "message acknowledged successfully",
 	})
 }

@@ -18,5 +18,7 @@ func Routes(app *app.Application) http.Handler {
 	mux.HandleFunc("/subscribe/", handler.HandleSubscribe)
 	mux.HandleFunc("/subscribe", handler.HandleRegisterConsumer)
 
+	mux.HandleFunc("/ack", handler.HandleAck)
+
 	return mux
 }

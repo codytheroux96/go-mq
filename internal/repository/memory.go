@@ -11,45 +11,45 @@ import (
 )
 
 type InMemoryRepo struct {
-	topics map[string]*topicEntry
-	mu     sync.RWMutex
+	Topics map[string]*topicEntry
+	Mu     sync.RWMutex
 }
 
 type topicEntry struct {
-	messages    []*core.Message
-	offsets     map[string]int // consumerID -> offset
-	subscribers map[string]*core.Consumer
+	Messages    []*core.Message
+	Offsets     map[string]int // consumerID -> offset
+	Subscribers map[string]*core.Consumer
 }
 
 func NewInMemoryRepo() *InMemoryRepo {
 	return &InMemoryRepo{
-		topics: make(map[string]*topicEntry),
+		Topics: make(map[string]*topicEntry),
 	}
 }
 
 func (m *InMemoryRepo) CreateTopic(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
 
-	if _, exists := m.topics[name]; exists {
+	if _, exists := m.Topics[name]; exists {
 		return fmt.Errorf("topic %q already exists", name)
 	}
 
-	m.topics[name] = &topicEntry{
-		messages:    []*core.Message{},
-		offsets:     map[string]int{},
-		subscribers: map[string]*core.Consumer{},
+	m.Topics[name] = &topicEntry{
+		Messages:    []*core.Message{},
+		Offsets:     map[string]int{},
+		Subscribers: map[string]*core.Consumer{},
 	}
 
 	return nil
 }
 
 func (m *InMemoryRepo) ListTopics() ([]string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.Mu.RLock()
+	defer m.Mu.RUnlock()
 
-	topics := make([]string, 0, len(m.topics))
-	for name := range m.topics {
+	topics := make([]string, 0, len(m.Topics))
+	for name := range m.Topics {
 		topics = append(topics, name)
 	}
 
@@ -57,28 +57,25 @@ func (m *InMemoryRepo) ListTopics() ([]string, error) {
 }
 
 func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
-	m.mu.RLock()
-	topicEntry, exists := m.topics[topic]
-	m.mu.RUnlock()
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
 
+	topicEntry, exists := m.Topics[topic]
 	if !exists {
 		return fmt.Errorf("topic %q does not exist", topic)
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if msg.ID == "" {
 		msg.ID = uuid.NewString()
 	}
 	msg.Timestamp = time.Now()
 
-	topicEntry.messages = append(topicEntry.messages, msg)
+	topicEntry.Messages = append(topicEntry.Messages, msg)
 
-	for _, consumer := range topicEntry.subscribers {
+	for consumerID, consumer := range topicEntry.Subscribers {
 		select {
 		case consumer.Inbox <- msg:
-			// sent successfully
+			msg.DeliveredTo[consumerID] = true
 		default:
 			// inbox is full and we will skip
 		}
@@ -88,67 +85,67 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 }
 
 func (m *InMemoryRepo) DeleteTopic(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
 
-	if _, exists := m.topics[name]; !exists {
+	if _, exists := m.Topics[name]; !exists {
 		return fmt.Errorf("topic %q does not exist", name)
 	}
 
-	delete(m.topics, name)
+	delete(m.Topics, name)
 	return nil
 }
 
 func (m *InMemoryRepo) Fetch(topic, consumerID string, limit int) ([]*core.Message, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.Mu.RLock()
+	defer m.Mu.RUnlock()
 
-	topicEntry, exists := m.topics[topic]
+	topicEntry, exists := m.Topics[topic]
 	if !exists {
 		return nil, fmt.Errorf("topic %q does not exist", topic)
 	}
 
-	offset := topicEntry.offsets[consumerID]
+	offset := topicEntry.Offsets[consumerID]
 
 	end := offset + limit
-	if end > len(topicEntry.messages) {
-		end = len(topicEntry.messages)
+	if end > len(topicEntry.Messages) {
+		end = len(topicEntry.Messages)
 	}
 
-	if offset >= len(topicEntry.messages) {
+	if offset >= len(topicEntry.Messages) {
 		return []*core.Message{}, nil
 	}
 
-	return topicEntry.messages[offset:end], nil
+	return topicEntry.Messages[offset:end], nil
 }
 
 func (m *InMemoryRepo) CommitOffset(topic, consumerID string, offset int) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
 
-	topicEntry, exists := m.topics[topic]
+	topicEntry, exists := m.Topics[topic]
 	if !exists {
 		return fmt.Errorf("topic %q does not exist", topic)
 	}
 
-	if offset > len(topicEntry.messages) {
-		return fmt.Errorf("cannot commit offset %d beyond the topic length %d", offset, len(topicEntry.messages))
+	if offset > len(topicEntry.Messages) {
+		return fmt.Errorf("cannot commit offset %d beyond the topic length %d", offset, len(topicEntry.Messages))
 	}
 
-	topicEntry.offsets[consumerID] = offset
+	topicEntry.Offsets[consumerID] = offset
 	return nil
 }
 
 func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.Mu.RLock()
+	defer m.Mu.RUnlock()
 
-	topicEntry, exists := m.topics[topic]
+	topicEntry, exists := m.Topics[topic]
 	if !exists {
 		return 0, fmt.Errorf("topic %q does not exist", topic)
 	}
 
-	offset, ok := topicEntry.offsets[consumerID]
+	offset, ok := topicEntry.Offsets[consumerID]
 	if !ok {
 		return 0, nil
 	}
@@ -157,23 +154,23 @@ func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
 }
 
 func (m *InMemoryRepo) Subscribe(topicName, consumerID string) (<-chan *core.Message, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
 
-	topicEntry, exists := m.topics[topicName]
+	topicEntry, exists := m.Topics[topicName]
 	if !exists {
 		return nil, fmt.Errorf("topic %q does not exist", topicName)
 	}
 
-	if _, ok := topicEntry.subscribers[consumerID]; ok {
-		return topicEntry.subscribers[consumerID].Inbox, nil
+	if _, ok := topicEntry.Subscribers[consumerID]; ok {
+		return topicEntry.Subscribers[consumerID].Inbox, nil
 	}
 
 	consumer := core.NewConsumer(consumerID)
 
-	topicEntry.subscribers[consumerID] = consumer
+	topicEntry.Subscribers[consumerID] = consumer
 
-	topicEntry.offsets[consumerID] = 0
+	topicEntry.Offsets[consumerID] = 0
 
 	return consumer.Inbox, nil
 }
