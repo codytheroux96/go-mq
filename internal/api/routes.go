@@ -20,5 +20,7 @@ func Routes(app *app.Application) http.Handler {
 
 	mux.HandleFunc("/ack", handler.HandleAck)
 
+	mux.HandleFunc("/health", handler.HandleHealthCheck)
+
 	return mux
 }
