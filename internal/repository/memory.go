@@ -44,6 +44,18 @@ func (m *InMemoryRepo) CreateTopic(name string) error {
 	return nil
 }
 
+func (m *InMemoryRepo) ListTopics() ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	topics := make([]string, 0, len(m.topics))
+	for name := range m.topics {
+		topics = append(topics, name)
+	}
+
+	return topics, nil
+}
+
 func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	m.mu.RLock()
 	topicEntry, exists := m.topics[topic]

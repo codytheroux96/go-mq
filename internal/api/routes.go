@@ -8,6 +8,9 @@ import (
 
 func Routes(app *app.Application) http.Handler {
 	mux := http.NewServeMux()
+	handler := &Handler{App: app}
+
+	mux.HandleFunc("/topics", handler.HandleTopics)
 
 	return mux
 }
