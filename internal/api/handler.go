@@ -81,10 +81,25 @@ func (h *Handler) HandleDeleteTopic(w http.ResponseWriter, r *http.Request) {
 
 	topicName := strings.TrimPrefix(r.URL.Path, "/topics/")
 	if topicName == "" {
-		h.App.Logger.Error("missing topic name in delete request")
+		h.App.Logger.Warn("missing topic name in delete request")
 		http.Error(w, "topic name is required for delete request", http.StatusBadRequest)
 		return
 	}
 
-	
+	if err := h.App.Repo.DeleteTopic(topicName); err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			h.App.Logger.Error("attempt to delete topic that does not exist", "topic", topicName)
+			http.Error(w, "topic requested to be deleted does not exist", http.StatusNotFound)
+			return
+		}
+		h.App.Logger.Error("failed to delete topic", "topic", topicName)
+		http.Error(w, "failed to delete topic", http.StatusInternalServerError)
+		return
+	}
+
+	h.App.Logger.Info("topic was successfully deleted", "topic", topicName)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "topic deleted successfully"})
 }
