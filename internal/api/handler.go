@@ -205,3 +205,58 @@ func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (h *Handler) HandleRegisterConsumer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.App.Logger.Warn("http method not allowed for registering a consumer", "method", r.Method)
+		http.Error(w, "http method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Header.Get("Content-Type") != "application/json" {
+		h.App.Logger.Warn("invalid content-type received", "received", r.Header.Get("Content-Type"))
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	var req struct {
+		Topic      string `json:"topic"`
+		ConsumerID string `json:"consumer_id"`
+		Offset     *int   `json:"offset"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Topic == "" || req.ConsumerID == "" {
+		h.App.Logger.Error("invalid consumer registration request", "error", err)
+		http.Error(w, "invalid payload in request", http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.App.Repo.Subscribe(req.Topic, req.ConsumerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			h.App.Logger.Warn("subscribe attempted on non-existent topic", "topic", req.Topic)
+			http.Error(w, "topic does not exist", http.StatusNotFound)
+			return
+		}
+		h.App.Logger.Error("failed to subscribe consumer", "topic", req.Topic, "consumer", req.ConsumerID, "error", err)
+		http.Error(w, "failed to register consumer", http.StatusInternalServerError)
+		return
+	}
+
+	if req.Offset != nil {
+		if err := h.App.Repo.CommitOffset(req.Topic, req.ConsumerID, *req.Offset); err != nil {
+			h.App.Logger.Warn("failed to set custom offset after consumer registration", "topic", req.Topic, "consumer", req.ConsumerID, "offset", *req.Offset, "error", err)
+			http.Error(w, "consumer registered but failed to set offset", http.StatusBadRequest)
+			return
+		}
+		h.App.Logger.Info("custom offset successfully sete during consumer registration", "topic", req.Topic, "consumer", req.ConsumerID, "offset", *req.Offset)
+	}
+
+	h.App.Logger.Info("consumer subscribed successfully", "topic", req.Topic, "consumer", req.ConsumerID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "consumer subscribed successfully",
+	})
+}

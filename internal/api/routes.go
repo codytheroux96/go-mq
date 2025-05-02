@@ -16,6 +16,7 @@ func Routes(app *app.Application) http.Handler {
 	mux.HandleFunc("/publish/", handler.HandlePublish)
 
 	mux.HandleFunc("/subscribe/", handler.HandleSubscribe)
+	mux.HandleFunc("/subscribe", handler.HandleRegisterConsumer)
 
 	return mux
 }
