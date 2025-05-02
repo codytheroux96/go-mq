@@ -87,6 +87,18 @@ func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	return nil
 }
 
+func (m *InMemoryRepo) DeleteTopic(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.topics[name]; !exists {
+		return fmt.Errorf("topic %q does not exist", name)
+	}
+
+	delete(m.topics, name)
+	return nil
+}
+
 func (m *InMemoryRepo) Fetch(topic, consumerID string, limit int) ([]*core.Message, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

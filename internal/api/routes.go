@@ -11,6 +11,7 @@ func Routes(app *app.Application) http.Handler {
 	handler := &Handler{App: app}
 
 	mux.HandleFunc("/topics", handler.HandleTopics)
+	mux.HandleFunc("/topics/", handler.HandleDeleteTopic)
 
 	return mux
 }

@@ -71,3 +71,20 @@ func (h *Handler) HandleListTopics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string][]string{"topics": topics})
 }
+
+func (h *Handler) HandleDeleteTopic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		h.App.Logger.Warn("http method not allowed for deleting topic", "method", r.Method)
+		http.Error(w, "http method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	topicName := strings.TrimPrefix(r.URL.Path, "/topics/")
+	if topicName == "" {
+		h.App.Logger.Error("missing topic name in delete request")
+		http.Error(w, "topic name is required for delete request", http.StatusBadRequest)
+		return
+	}
+
+	
+}
