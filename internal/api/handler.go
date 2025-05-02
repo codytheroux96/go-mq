@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/codytheroux96/go-mq/internal/app"
 	"github.com/codytheroux96/go-mq/internal/core"
@@ -153,4 +154,54 @@ func (h *Handler) HandlePublish(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{"message": "message published successfully"})
+}
+
+func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.App.Logger.Warn("http method not allowed for subscribing to a topic", "method", r.Method)
+		http.Error(w, "http method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	topicName := strings.TrimPrefix(r.URL.Path, "/subscribe/")
+	if topicName == "" {
+		h.App.Logger.Warn("missing topic name in subscribe request")
+		http.Error(w, "topic name is required in order to subscribe", http.StatusBadRequest)
+		return
+	}
+
+	consumerID := r.URL.Query().Get("consumer_id")
+	if consumerID == "" {
+		h.App.Logger.Warn("missing consumer ID in subscribe request")
+		http.Error(w, "cosumer_id is required in order to subscribe", http.StatusBadRequest)
+		return
+	}
+
+	inbox, err := h.App.Repo.Subscribe(topicName, consumerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			h.App.Logger.Warn("subscribe was attempted on a non-existent topic", "topic", topicName)
+			http.Error(w, "topic does not exist", http.StatusNotFound)
+			return
+		}
+		h.App.Logger.Error("failed to subscribe to topic", "topic", topicName, "error", err)
+		http.Error(w, "failed to subscribe to topic", http.StatusInternalServerError)
+		return
+	}
+
+	select {
+	case msg := <-inbox:
+		h.App.Logger.Info("delivered message to consumer", "topic", topicName, "consumer", consumerID, "message_id", msg.ID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"body":        string(msg.Body),
+			"producer_id": msg.ProducerID,
+			"timestamp":   msg.Timestamp,
+			"message_id":  msg.ID,
+		})
+	case <-time.After(10 * time.Second):
+		h.App.Logger.Info("subscribe timeout: no messages", "topic", topicName, "consumer", consumerID)
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
