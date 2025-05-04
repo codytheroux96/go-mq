@@ -15,12 +15,14 @@ func Routes(app *app.Application) http.Handler {
 
 	mux.HandleFunc("/publish/", handler.HandlePublish)
 
-	mux.HandleFunc("/subscribe/", handler.HandleSubscribe)
 	mux.HandleFunc("/subscribe", handler.HandleRegisterConsumer)
+	mux.HandleFunc("/subscribe/", handler.HandleSubscribe)
 
 	mux.HandleFunc("/ack", handler.HandleAck)
 
 	mux.HandleFunc("/health", handler.HandleHealthCheck)
+
+	mux.HandleFunc("/fetch", handler.HandleFetchMessages)
 
 	return mux
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -352,4 +353,71 @@ func (h *Handler) HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"status":  "ok",
 		"service": "go-mq",
 	})
+}
+
+func (h *Handler) HandleFetchMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.App.Logger.Warn("http method not allowed for fetch", "method", r.Method)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	topic := r.Header.Get("X-Topic")
+	consumerID := r.Header.Get("X-Consumer-ID")
+	limitStr := r.Header.Get("X-Limit")
+	offsetStr := r.Header.Get("X-Offset")
+	commit := strings.ToLower(r.Header.Get("X-Commit")) == "true"
+
+	if topic == "" || consumerID == "" {
+		h.App.Logger.Warn("missing required fetch headers:", "topic", topic, "consumerID", consumerID)
+		http.Error(w, "X-Topic and X-Consumer-ID headers are required", http.StatusBadRequest)
+		return
+	}
+
+	limit := 10
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	offset := -1
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	var startOffset int
+	var err error
+	if offset >= 0 {
+		startOffset = offset
+	} else {
+		startOffset, err = h.App.Repo.GetOffset(topic, consumerID)
+		if err != nil {
+			h.App.Logger.Error("failed to get offset", "topic", topic, "consumer", consumerID, "error", err)
+			http.Error(w, "failed to retrieve offset", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	messages, err := h.App.Repo.Fetch(topic, consumerID, limit)
+	if err != nil {
+		h.App.Logger.Error("failed to fetch messages", "topic", topic, "consumer", consumerID, "error", err)
+		http.Error(w, "failed to fetch messages", http.StatusInternalServerError)
+		return
+	}
+
+	if commit {
+		if err := h.App.Repo.CommitOffset(topic, consumerID, startOffset+len(messages)); err != nil {
+			h.App.Logger.Warn("failed to auto-commit offset", "topic", topic, "consumer", consumerID, "error", err)
+		} else {
+			h.App.Logger.Info("fetched and committed messages", "topic", topic, "consumer", consumerID, "new_offset", startOffset+len(messages))
+		}
+	} else {
+		h.App.Logger.Info("fetched messages without committing", "topic", topic, "consumer", consumerID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
 }
