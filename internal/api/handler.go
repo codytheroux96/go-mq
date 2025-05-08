@@ -140,7 +140,7 @@ func (h *Handler) HandlePublish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := core.NewMessage([]byte(req.Body), req.ProducerID)
-	if err := h.App.Repo.Publish(topicName, msg); err != nil {
+	if err := h.App.Broker.Publish(topicName, msg); err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			h.App.Logger.Error("attempting to publish to a topic that does not exist", "topic", topicName)
 			http.Error(w, "topic requested to publish to does not exist", http.StatusNotFound)
@@ -179,7 +179,7 @@ func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inbox, err := h.App.Repo.Subscribe(topicName, consumerID)
+	inbox, err := h.App.Broker.Subscribe(topicName, consumerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			h.App.Logger.Warn("subscribe was attempted on a non-existent topic", "topic", topicName)
@@ -233,7 +233,7 @@ func (h *Handler) HandleRegisterConsumer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := h.App.Repo.Subscribe(req.Topic, req.ConsumerID)
+	_, err := h.App.Broker.Subscribe(req.Topic, req.ConsumerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			h.App.Logger.Warn("subscribe attempted on non-existent topic", "topic", req.Topic)

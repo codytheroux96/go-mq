@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/codytheroux96/go-mq/internal/core"
@@ -33,7 +32,7 @@ func TestInMemoryRepo(t *testing.T) {
 		{
 			name: "Publish message to topic",
 			action: func() (any, error) {
-				msg := &core.Message{Body: []byte("Test message 1")}
+				msg := &core.Message{ID: "msg-1", Body: []byte("Test message 1")}
 				return nil, repo.Publish("test-topic", msg)
 			},
 			expectErr: false,
@@ -41,7 +40,7 @@ func TestInMemoryRepo(t *testing.T) {
 		{
 			name: "Publish another message",
 			action: func() (any, error) {
-				msg := &core.Message{Body: []byte("Test message 2")}
+				msg := &core.Message{ID: "msg-2", Body: []byte("Test message 2")}
 				return nil, repo.Publish("test-topic", msg)
 			},
 			expectErr: false,
@@ -60,7 +59,7 @@ func TestInMemoryRepo(t *testing.T) {
 				return repo.GetOffset("test-topic", "consumer-1")
 			},
 			expectErr: false,
-			expectVal: 0, // still at offset 0 until commit
+			expectVal: 0, // offset defaults to 0
 		},
 		{
 			name: "Commit offset after processing",
@@ -75,7 +74,7 @@ func TestInMemoryRepo(t *testing.T) {
 				return repo.GetOffset("test-topic", "consumer-1")
 			},
 			expectErr: false,
-			expectVal: 1, // now offset should be 1
+			expectVal: 1,
 		},
 		{
 			name: "Fetch second message batch",
@@ -83,41 +82,7 @@ func TestInMemoryRepo(t *testing.T) {
 				return repo.Fetch("test-topic", "consumer-1", 1)
 			},
 			expectErr: false,
-			expectVal: 1, // should fetch the next 1 message
-		},
-		{
-			name: "Subscribe to topic",
-			action: func() (any, error) {
-				return repo.Subscribe("test-topic", "consumer-2")
-			},
-			expectErr: false,
-		},
-		{
-			name: "Publish delivers to live subscriber",
-			action: func() (any, error) {
-				ch, err := repo.Subscribe("test-topic", "consumer-3")
-				if err != nil {
-					return nil, err
-				}
-
-				msg := core.NewMessage([]byte("live message"), "producer-1")
-				err = repo.Publish("test-topic", msg)
-				if err != nil {
-					return nil, err
-				}
-
-				select {
-				case received := <-ch:
-					if string(received.Body) != "live message" {
-						return nil, fmt.Errorf("expected 'live message', got '%s'", string(received.Body))
-					}
-					return "delivered", nil
-				default:
-					return nil, fmt.Errorf("no message received on subscriber channel")
-				}
-			},
-			expectErr: false,
-			expectVal: "delivered",
+			expectVal: 1,
 		},
 	}
 
@@ -146,10 +111,6 @@ func TestInMemoryRepo(t *testing.T) {
 						}
 					default:
 						t.Fatalf("unexpected return type: %T", got)
-					}
-				case string:
-					if gotStr, ok := got.(string); !ok || gotStr != expected {
-						t.Fatalf("expected value %q, got %v", expected, got)
 					}
 				default:
 					t.Fatalf("unsupported expectVal type: %T", tt.expectVal)

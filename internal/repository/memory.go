@@ -3,11 +3,8 @@ package repository
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/codytheroux96/go-mq/internal/core"
-
-	"github.com/google/uuid"
 )
 
 type InMemoryRepo struct {
@@ -54,34 +51,6 @@ func (m *InMemoryRepo) ListTopics() ([]string, error) {
 	}
 
 	return topics, nil
-}
-
-func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
-	m.Mu.Lock()
-	defer m.Mu.Unlock()
-
-	topicEntry, exists := m.Topics[topic]
-	if !exists {
-		return fmt.Errorf("topic %q does not exist", topic)
-	}
-
-	if msg.ID == "" {
-		msg.ID = uuid.NewString()
-	}
-	msg.Timestamp = time.Now()
-
-	topicEntry.Messages = append(topicEntry.Messages, msg)
-
-	for consumerID, consumer := range topicEntry.Subscribers {
-		select {
-		case consumer.Inbox <- msg:
-			msg.DeliveredTo[consumerID] = true
-		default:
-			// inbox is full and we will skip
-		}
-	}
-
-	return nil
 }
 
 func (m *InMemoryRepo) DeleteTopic(name string) error {
@@ -153,24 +122,15 @@ func (m *InMemoryRepo) GetOffset(topic, consumerID string) (int, error) {
 	return offset, nil
 }
 
-func (m *InMemoryRepo) Subscribe(topicName, consumerID string) (<-chan *core.Message, error) {
+func (m *InMemoryRepo) Publish(topic string, msg *core.Message) error {
 	m.Mu.Lock()
 	defer m.Mu.Unlock()
 
-	topicEntry, exists := m.Topics[topicName]
+	topicEntry, exists := m.Topics[topic]
 	if !exists {
-		return nil, fmt.Errorf("topic %q does not exist", topicName)
+		return fmt.Errorf("topic %q does not exist", topic)
 	}
 
-	if _, ok := topicEntry.Subscribers[consumerID]; ok {
-		return topicEntry.Subscribers[consumerID].Inbox, nil
-	}
-
-	consumer := core.NewConsumer(consumerID)
-
-	topicEntry.Subscribers[consumerID] = consumer
-
-	topicEntry.Offsets[consumerID] = 0
-
-	return consumer.Inbox, nil
+	topicEntry.Messages = append(topicEntry.Messages, msg)
+	return nil
 }
